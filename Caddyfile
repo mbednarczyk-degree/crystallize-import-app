@@ -1,0 +1,4 @@
+import.app.crystallize.app.local {
+	reverse_proxy 127.0.0.1:3002
+	tls import.app.crystallize.com.pem import.app.crystallize.com-key.pem
+}

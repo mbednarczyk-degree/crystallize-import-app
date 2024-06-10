@@ -1,0 +1,12 @@
+app = "crystallize-import-app"
+primary_region = "fra"
+
+[build]
+
+[http_service]
+internal_port = 80
+force_https = true
+auto_stop_machines = true
+auto_start_machines = true
+min_machines_running = 1
+processes = ["app"]
