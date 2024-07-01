@@ -81,6 +81,10 @@ const contentForComponent = (component: ShapeComponent, key: string, content: st
         return selectedOptions;
     }
 
+    if (component.type === 'files') {
+        return content.split(',').map((src) => ({ src }));
+    }
+
     throw new Error(`Component type "${component.type} is not yet supported for import"`);
 };
 
