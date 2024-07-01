@@ -1,15 +1,15 @@
 import {
+    JSONContentChunk,
     JSONItem,
     type JSONComponentContent,
     type JSONImage,
     type JSONProduct,
     type JSONProductVariant,
-    JSONContentChunk,
 } from '@crystallize/import-utilities';
-import { v4 as uuidv4 } from 'uuid';
 import type { ContentChunkComponentConfig, NumericComponentConfig, Shape, ShapeComponent } from '@crystallize/schema';
-import { FIELD_MAPPINGS } from '~/contracts/ui-types';
+import { v4 as uuidv4 } from 'uuid';
 import { FormSubmission } from '~/contracts/form-submission';
+import { FIELD_MAPPINGS } from '~/contracts/ui-types';
 
 const contentForComponent = (component: ShapeComponent, key: string, content: string): any => {
     if (component.type === 'boolean') {
@@ -68,6 +68,19 @@ const contentForComponent = (component: ShapeComponent, key: string, content: st
             },
         ];
     }
+
+    if (component.type === 'selection') {
+        const options = (component.config as any).options || [];
+        const selectedOptions = content
+            .split(',')
+            .map((value) => {
+                const option = options.find((opt: any) => opt.value === value.trim());
+                return option ? option.key : null;
+            })
+            .filter(Boolean);
+        return selectedOptions;
+    }
+
     throw new Error(`Component type "${component.type} is not yet supported for import"`);
 };
 
