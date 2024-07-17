@@ -1,6 +1,6 @@
+import { forwardRef, useRef } from 'react';
 import { FormSubmission } from '~/contracts/form-submission';
 import { useImport } from '../../provider';
-import { useRef, forwardRef } from 'react';
 
 const FlowStagesSelect = forwardRef<HTMLSelectElement, { defaultOption: string }>((props, ref) => {
     const { state } = useImport();
@@ -40,6 +40,46 @@ export const Submit = () => {
     const roundRef = useRef<HTMLInputElement>(null);
     const validFlowRef = useRef<HTMLSelectElement>(null);
     const invalidFlowRef = useRef<HTMLSelectElement>(null);
+
+    const importData = async () => {
+        dispatch.updateLoading(true);
+        try {
+            const post: FormSubmission = {
+                importId: state.importId,
+                shapeIdentifier: state.selectedShape.identifier,
+                folderPath: state.selectedFolder.tree?.path ?? '/',
+                groupProductsBy: state.groupProductsBy,
+                mapping: state.mapping,
+                rows: state.rows.filter((row) => row._import),
+                doPublish: publishRef.current?.checked ?? false,
+                subFolderMapping: state.subFolderMapping,
+                validFlowStage: validFlowRef.current?.value ?? undefined,
+                invalidFlowStage: invalidFlowRef.current?.value ?? undefined,
+                roundPrices: roundRef.current?.checked ?? false,
+            };
+            const res = await fetch('/api/submit', {
+                method: 'POST',
+                cache: 'no-cache',
+                body: JSON.stringify(post),
+            });
+            if (res.status !== 200) {
+                const error = await res.json();
+                console.error(error);
+            } else {
+                const response = await res.json();
+                if (response.success === true) {
+                    dispatch.updateDone(true);
+                } else {
+                    console.error('dispatching', response.errors);
+                    dispatch.updateMainErrors(response.errors);
+                }
+            }
+        } catch (err: any) {
+            console.error(err);
+        } finally {
+            dispatch.updateLoading(false);
+        }
+    };
     return (
         <>
             <div className="flex flex-col py-2">
@@ -68,45 +108,7 @@ export const Submit = () => {
                 </div>
                 <button
                     className="submit"
-                    onClick={async () => {
-                        dispatch.updateLoading(true);
-                        try {
-                            const post: FormSubmission = {
-                                importId: state.importId,
-                                shapeIdentifier: state.selectedShape.identifier,
-                                folderPath: state.selectedFolder.tree?.path ?? '/',
-                                groupProductsBy: state.groupProductsBy,
-                                mapping: state.mapping,
-                                rows: state.rows.filter((row) => row._import),
-                                doPublish: publishRef.current?.checked ?? false,
-                                subFolderMapping: state.subFolderMapping,
-                                validFlowStage: validFlowRef.current?.value ?? undefined,
-                                invalidFlowStage: invalidFlowRef.current?.value ?? undefined,
-                                roundPrices: roundRef.current?.checked ?? false,
-                            };
-                            const res = await fetch('/api/submit', {
-                                method: 'POST',
-                                cache: 'no-cache',
-                                body: JSON.stringify(post),
-                            });
-                            if (res.status !== 200) {
-                                const error = await res.json();
-                                console.error(error);
-                            } else {
-                                const response = await res.json();
-                                if (response.success === true) {
-                                    dispatch.updateDone(true);
-                                } else {
-                                    console.error('dispatching', response.errors);
-                                    dispatch.updateMainErrors(response.errors);
-                                }
-                            }
-                        } catch (err: any) {
-                            console.error(err);
-                        } finally {
-                            dispatch.updateLoading(false);
-                        }
-                    }}
+                    onClick={importData}
                     type="button"
                     disabled={!state.rows?.length || state.done}
                 >

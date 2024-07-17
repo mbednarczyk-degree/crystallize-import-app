@@ -25,7 +25,7 @@ type Item = {
     from: JSONItem;
 };
 
-type Subscriptons = {
+type Subscriptions = {
     onItemCreated?: (item: Item) => Promise<void>;
     onItemUpdated?: (item: Item) => Promise<void>;
 };
@@ -33,7 +33,7 @@ type Subscriptons = {
 export const runImport = async (
     importUuid: string,
     spec: JsonSpec,
-    { onItemCreated, onItemUpdated }: Subscriptons,
+    { onItemCreated, onItemUpdated }: Subscriptions,
     { tenantIdentifier, sessionId, skipPublication, verbose, emitter }: Deps,
 ) => {
     // dump({ spec }, 200);
