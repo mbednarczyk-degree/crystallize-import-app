@@ -186,8 +186,16 @@ export const specFromFormSubmission = async (submission: FormSubmission, shapes:
     if (!shape) {
         throw new Error(`Shape ${shapeIdentifier} not found.`);
     }
+
     const buildExternalReference = (name: string) => {
-        return folderPath.replace(/^\//, '-').replace(/\//g, '-') + '-' + name.replace(/\//g, '-').toLocaleLowerCase();
+        return (
+            folderPath.replace(/^\//, '').replace(/\//g, '-') +
+            '-' +
+            name
+                .replace(/([a-z])([A-Z])/g, '$1-$2')
+                .replace(/[\s_]+/g, '-')
+                .toLowerCase()
+        );
     };
 
     const folders = subFolderMapping
@@ -243,6 +251,7 @@ export const specFromFormSubmission = async (submission: FormSubmission, shapes:
                 shape: shape.identifier,
                 vatType: 'No Tax',
                 variants: [variants[i]],
+                externalReference: buildExternalReference(productName),
                 components: mapComponents(row, mapping, 'components', shape),
                 ...findParent(row),
             };
