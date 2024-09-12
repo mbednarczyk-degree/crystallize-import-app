@@ -44,36 +44,48 @@ export const Submit = () => {
     const importData = async () => {
         dispatch.updateLoading(true);
         try {
-            const post: FormSubmission = {
-                importId: state.importId,
-                shapeIdentifier: state.selectedShape.identifier,
-                folderPath: state.selectedFolder.tree?.path ?? '/',
-                groupProductsBy: state.groupProductsBy,
-                mapping: state.mapping,
-                rows: state.rows.filter((row) => row._import),
-                doPublish: publishRef.current?.checked ?? false,
-                subFolderMapping: state.subFolderMapping,
-                validFlowStage: validFlowRef.current?.value ?? undefined,
-                invalidFlowStage: invalidFlowRef.current?.value ?? undefined,
-                roundPrices: roundRef.current?.checked ?? false,
-            };
-            const res = await fetch('/api/submit', {
-                method: 'POST',
-                cache: 'no-cache',
-                body: JSON.stringify(post),
-            });
-            if (res.status !== 200) {
-                const error = await res.json();
-                console.error(error);
-            } else {
-                const response = await res.json();
-                if (response.success === true) {
-                    dispatch.updateDone(true);
+            const rows = state.rows.filter((row) => row._import);
+            const batchSize = 5;
+            const totalRows = rows.length;
+
+            for (let i = 0; i < totalRows; i += batchSize) {
+                const batchRows = rows.slice(i, i + batchSize);
+
+                const post: FormSubmission = {
+                    importId: state.importId,
+                    shapeIdentifier: state.selectedShape.identifier,
+                    folderPath: state.selectedFolder.tree?.path ?? '/',
+                    groupProductsBy: state.groupProductsBy,
+                    mapping: state.mapping,
+                    rows: batchRows,
+                    doPublish: publishRef.current?.checked ?? false,
+                    subFolderMapping: state.subFolderMapping,
+                    validFlowStage: validFlowRef.current?.value ?? undefined,
+                    invalidFlowStage: invalidFlowRef.current?.value ?? undefined,
+                    roundPrices: roundRef.current?.checked ?? false,
+                };
+
+                const res = await fetch('/api/submit', {
+                    method: 'POST',
+                    cache: 'no-cache',
+                    body: JSON.stringify(post),
+                });
+
+                if (res.status !== 200) {
+                    const error = await res.json();
+                    console.error(error);
+                    break;
                 } else {
-                    console.error('dispatching', response.errors);
-                    dispatch.updateMainErrors(response.errors);
+                    const response = await res.json();
+                    if (response.success !== true) {
+                        console.error('dispatching', response.errors);
+                        dispatch.updateMainErrors(response.errors);
+                        break;
+                    }
                 }
             }
+
+            dispatch.updateDone(true);
         } catch (err: any) {
             console.error(err);
         } finally {
