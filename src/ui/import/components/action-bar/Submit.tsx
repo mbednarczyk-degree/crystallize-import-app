@@ -45,7 +45,7 @@ export const Submit = () => {
         dispatch.updateLoading(true);
         try {
             const rows = state.rows.filter((row) => row._import);
-            const batchSize = 5;
+            const batchSize = 1;
             const totalRows = rows.length;
 
             for (let i = 0; i < totalRows; i += batchSize) {
