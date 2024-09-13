@@ -168,16 +168,16 @@ const mapComponents = (
                     const search = sth?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
 
                     emptyContentChunks.forEach((chunk) => {
-                        delete search[chunk];
-                        delete newChunkEntries[chunk];
-                        delete existingChunkEntries[chunk];
+                        delete search?.[chunk];
+                        delete newChunkEntries?.[chunk];
+                        delete existingChunkEntries?.[chunk];
                     });
 
                     acc[componentId] = [
                         {
                             ...(search || {}),
-                            ...existingChunkEntries,
-                            ...newChunkEntries,
+                            ...(existingChunkEntries || {}),
+                            ...(newChunkEntries || {}),
                         },
                     ];
 
@@ -187,8 +187,8 @@ const mapComponents = (
                 const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)?.[0];
 
                 emptyContentChunks.forEach((chunk) => {
-                    delete search[chunk];
-                    delete newChunkEntries[chunk];
+                    delete search?.[chunk];
+                    delete newChunkEntries?.[chunk];
                 });
 
                 acc[componentId] = [
@@ -276,12 +276,12 @@ export const specFromFormSubmission = async (
 
     const buildExternalReference = (name: string) => {
         return (
-            folderPath.replace(/^\//, '').replace(/\//g, '-') +
+            folderPath?.replace(/^\//, '')?.replace(/\//g, '-') +
             '-' +
             name
-                .replace(/([a-z])([A-Z])/g, '$1-$2')
-                .replace(/[\s_]+/g, '-')
-                .toLowerCase()
+                ?.replace(/([a-z])([A-Z])/g, '$1-$2')
+                ?.replace(/[\s_]+/g, '-')
+                ?.toLowerCase()
         );
     };
 
