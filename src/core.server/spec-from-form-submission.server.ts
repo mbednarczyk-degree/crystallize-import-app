@@ -87,14 +87,15 @@ const contentForComponent = (component: ShapeComponent, key: string, content: st
 
     throw new Error(`Component type "${component.type} is not yet supported for import"`);
 };
-
+const emptyContentChunks = [] as string[];
 const mapComponents = (
     row: Record<string, any>,
     mapping: Record<string, string>,
     prefix: 'components' | 'variantComponents',
     shape: Shape,
+    fetchedProduct?: JSONItem,
 ): Record<string, JSONComponentContent> => {
-    return Object.entries(mapping)
+    const componentsMap = Object.entries(mapping)
         .filter(([key]) => key.split('.')[0] === prefix)
         .reduce((acc: Record<string, JSONComponentContent>, [key, value]) => {
             const keyParts = key.split('.');
@@ -108,28 +109,106 @@ const mapComponents = (
             }
 
             if (!content) {
+                if (component.type === 'contentChunk' && keyParts?.[2]) {
+                    emptyContentChunks.push(keyParts?.[2]);
+                }
+
                 return acc;
             }
 
-            if (acc[componentId] && component.type === 'contentChunk') {
-                // that's normal, we can have multiple content chunks
-                // but the import will only fill the 1st one
-                const existingChunks = acc[componentId] as JSONContentChunk;
-                const existingChunkEntries = existingChunks[0];
-                const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)[0];
+            if (component.type === 'contentChunk') {
+                // @ts-ignore
+                const fetchedProductChunks = fetchedProduct?.components?.filter(
+                    (cmp: any) => cmp.type === 'contentChunk',
+                );
+
+                const sth = fetchedProductChunks
+                    ?.map((chunk: any) => {
+                        const content = chunk?.content?.chunks
+                            ?.flatMap((chunkArray: any) => {
+                                return chunkArray?.map((chunk: any) => {
+                                    if (chunk.type === 'selection') {
+                                        return {
+                                            [chunk.componentId]: chunk?.content?.options?.map(
+                                                (option: any) => option.key,
+                                            ),
+                                        };
+                                    }
+                                    if (chunk.type === 'files') {
+                                        return {
+                                            [chunk.componentId]: chunk?.content?.files?.map((file: any) => ({
+                                                src: file.url,
+                                            })),
+                                        };
+                                    }
+                                    return { [chunk.componentId]: chunk.content };
+                                });
+                            })
+                            ?.filter((item: any) => {
+                                const value = Object.values(item)[0];
+                                return value !== null && value !== undefined;
+                            });
+
+                        const reduceFetchedChunkContent = content?.reduce(
+                            (acc: any, item: any) => ({ ...acc, ...item }),
+                            {},
+                        );
+                        if (reduceFetchedChunkContent) {
+                            return { [chunk.componentId]: [reduceFetchedChunkContent] };
+                        }
+                    })
+                    ?.filter(Boolean);
+
+                if (acc[componentId]) {
+                    // that's normal, we can have multiple content chunks
+                    // but the import will only fill the 1st one
+                    const existingChunks = acc[componentId] as JSONContentChunk;
+                    const existingChunkEntries = existingChunks[0];
+                    const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)[0];
+                    const search = sth?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
+
+                    emptyContentChunks.forEach((chunk) => {
+                        delete search[chunk];
+                        delete newChunkEntries[chunk];
+                        delete existingChunkEntries[chunk];
+                    });
+
+                    acc[componentId] = [
+                        {
+                            ...(search || {}),
+                            ...existingChunkEntries,
+                            ...newChunkEntries,
+                        },
+                    ];
+
+                    return acc;
+                }
+                const search = sth?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
+                const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)?.[0];
+
+                emptyContentChunks.forEach((chunk) => {
+                    delete search[chunk];
+                    delete newChunkEntries[chunk];
+                });
+
                 acc[componentId] = [
                     {
-                        ...existingChunkEntries,
-                        ...newChunkEntries,
+                        ...(search || {}),
+                        ...(newChunkEntries || {}),
                     },
                 ];
+
                 return acc;
             }
 
-            acc[componentId] = contentForComponent(component, keyParts.slice(1).join('.'), content);
+            const newContent = contentForComponent(component, keyParts.slice(1).join('.'), content);
+
+            acc[componentId] = newContent;
 
             return acc;
         }, {});
+
+    return componentsMap;
 };
 
 type MapVariantOptions = {
@@ -139,6 +218,7 @@ const mapVariant = (
     row: Record<string, any>,
     mapping: Record<string, string>,
     shape: Shape,
+    fetchedProducts: JSONItem[],
     options?: MapVariantOptions,
 ): JSONProductVariant => {
     const name = row[mapping[FIELD_MAPPINGS.item.name.key]];
@@ -174,12 +254,19 @@ const mapVariant = (
             }),
         );
     }
-
-    variant.components = mapComponents(row, mapping, 'variantComponents', shape);
+    const fetchedProduct = fetchedProducts.find((product) => {
+        const { variants } = product as JSONProduct;
+        return variants.some((variant) => variant.sku === sku);
+    });
+    variant.components = mapComponents(row, mapping, 'variantComponents', shape, fetchedProduct);
     return variant;
 };
 
-export const specFromFormSubmission = async (submission: FormSubmission, shapes: Shape[]) => {
+export const specFromFormSubmission = async (
+    submission: FormSubmission,
+    shapes: Shape[],
+    fetchedProducts: JSONItem[],
+) => {
     const { shapeIdentifier, folderPath, rows, mapping, groupProductsBy, subFolderMapping, roundPrices } = submission;
 
     const shape = shapes.find((s) => s.identifier === shapeIdentifier);
@@ -240,19 +327,27 @@ export const specFromFormSubmission = async (submission: FormSubmission, shapes:
 
     if (shape.type === 'product') {
         const variants = rows.map((row) =>
-            mapVariant(row, mapping, shape, {
+            mapVariant(row, mapping, shape, fetchedProducts, {
                 roundPrices: !!roundPrices,
             }),
         );
         const mapProduct = (obj: Record<string, JSONProduct>, row: Record<string, any>, i: number) => {
             const productName = row[mapping['item.name']];
+            const sku = row[mapping['variant.sku']];
+            //find fetchedProduct by sku
+            const fetchedProduct = fetchedProducts?.find((product) => {
+                const { variants } = product as JSONProduct;
+                return variants.some((variant) => variant.sku === sku);
+            });
+            const productComponentMap = mapComponents(row, mapping, 'components', shape, fetchedProduct);
+
             let product: JSONProduct = {
                 name: productName || variants[i].name,
                 shape: shape.identifier,
                 vatType: 'No Tax',
                 variants: [variants[i]],
                 externalReference: buildExternalReference(productName),
-                components: mapComponents(row, mapping, 'components', shape),
+                components: productComponentMap,
                 ...findParent(row),
             };
 
@@ -270,14 +365,22 @@ export const specFromFormSubmission = async (submission: FormSubmission, shapes:
         items.push(...Object.values(rows.reduce(mapProduct, {})));
     } else {
         items.push(
-            ...rows.map((row) => ({
-                name: row[mapping['item.name']],
-                shape: shape.identifier,
-                components: mapComponents(row, mapping, 'components', shape),
-                ...findParent(row),
-            })),
+            ...rows.map((row) => {
+                const fetchedProduct = fetchedProducts.find((product) => {
+                    const { variants } = product as JSONProduct;
+                    return variants.some((variant) => variant.sku === row[mapping['variant.sku']]);
+                });
+                const product = {
+                    name: row[mapping['item.name']],
+                    shape: shape.identifier,
+                    components: mapComponents(row, mapping, 'components', shape, fetchedProduct),
+                    ...findParent(row),
+                };
+                return product;
+            }),
         );
     }
+
     return {
         items,
     };
