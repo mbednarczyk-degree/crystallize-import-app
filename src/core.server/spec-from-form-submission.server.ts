@@ -87,15 +87,15 @@ const contentForComponent = (component: ShapeComponent, key: string, content: st
 
     throw new Error(`Component type "${component.type} is not yet supported for import"`);
 };
-
+const emptyContentChunks = [] as string[];
 const mapComponents = (
     row: Record<string, any>,
     mapping: Record<string, string>,
     prefix: 'components' | 'variantComponents',
     shape: Shape,
-    fetchedProduct?: any,
+    fetchedProduct?: JSONItem,
 ): Record<string, JSONComponentContent> => {
-    const map = Object.entries(mapping)
+    const componentsMap = Object.entries(mapping)
         .filter(([key]) => key.split('.')[0] === prefix)
         .reduce((acc: Record<string, JSONComponentContent>, [key, value]) => {
             const keyParts = key.split('.');
@@ -109,44 +109,73 @@ const mapComponents = (
             }
 
             if (!content) {
+                if (component.type === 'contentChunk' && keyParts?.[2]) {
+                    emptyContentChunks.push(keyParts?.[2]);
+                }
+
                 return acc;
             }
-            const fetchedProductChunk = fetchedProduct?.components?.find((cmp: any) => cmp.type === 'contentChunk');
-            const fetchedChunkContent = fetchedProductChunk?.content?.chunks
-                ?.flatMap((chunkArray: any) => {
-                    return chunkArray.map((chunk: any) => {
-                        if (chunk.type === 'selection') {
-                            return { [chunk.componentId]: chunk?.content?.options.map((option: any) => option.key) };
-                        }
-                        if (chunk.type === 'files') {
-                            return {
-                                [chunk.componentId]: chunk?.content?.files.map((file: any) => ({ src: file.url })),
-                            };
-                        }
-                        return { [chunk.componentId]: chunk.content };
-                    });
-                })
-                .filter((item: any) => {
-                    const value = Object.values(item)[0];
-                    return value !== null && value !== undefined;
-                });
-
-            const reduceFetchedChunkContent = fetchedChunkContent?.reduce(
-                (acc: any, item: any) => ({ ...acc, ...item }),
-                {},
-            );
 
             if (component.type === 'contentChunk') {
+                // @ts-ignore
+                const fetchedProductChunks = fetchedProduct?.components?.filter(
+                    (cmp: any) => cmp.type === 'contentChunk',
+                );
+
+                const sth = fetchedProductChunks
+                    ?.map((chunk: any) => {
+                        const content = chunk?.content?.chunks
+                            ?.flatMap((chunkArray: any) => {
+                                return chunkArray?.map((chunk: any) => {
+                                    if (chunk.type === 'selection') {
+                                        return {
+                                            [chunk.componentId]: chunk?.content?.options?.map(
+                                                (option: any) => option.key,
+                                            ),
+                                        };
+                                    }
+                                    if (chunk.type === 'files') {
+                                        return {
+                                            [chunk.componentId]: chunk?.content?.files?.map((file: any) => ({
+                                                src: file.url,
+                                            })),
+                                        };
+                                    }
+                                    return { [chunk.componentId]: chunk.content };
+                                });
+                            })
+                            ?.filter((item: any) => {
+                                const value = Object.values(item)[0];
+                                return value !== null && value !== undefined;
+                            });
+
+                        const reduceFetchedChunkContent = content?.reduce(
+                            (acc: any, item: any) => ({ ...acc, ...item }),
+                            {},
+                        );
+                        if (reduceFetchedChunkContent) {
+                            return { [chunk.componentId]: [reduceFetchedChunkContent] };
+                        }
+                    })
+                    ?.filter(Boolean);
+
                 if (acc[componentId]) {
                     // that's normal, we can have multiple content chunks
                     // but the import will only fill the 1st one
                     const existingChunks = acc[componentId] as JSONContentChunk;
                     const existingChunkEntries = existingChunks[0];
                     const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)[0];
+                    const search = sth?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
+
+                    emptyContentChunks.forEach((chunk) => {
+                        delete search[chunk];
+                        delete newChunkEntries[chunk];
+                        delete existingChunkEntries[chunk];
+                    });
 
                     acc[componentId] = [
                         {
-                            ...(reduceFetchedChunkContent || {}),
+                            ...(search || {}),
                             ...existingChunkEntries,
                             ...newChunkEntries,
                         },
@@ -154,13 +183,21 @@ const mapComponents = (
 
                     return acc;
                 }
+                const search = sth?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
+                const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)?.[0];
+
+                emptyContentChunks.forEach((chunk) => {
+                    delete search[chunk];
+                    delete newChunkEntries[chunk];
+                });
+
                 acc[componentId] = [
                     {
-                        ...(reduceFetchedChunkContent || {}),
-                        ...(contentForComponent(component, keyParts.slice(1).join('.'), content)?.[0] || {}),
-                        ...(contentForComponent(component, keyParts.slice(1).join('.'), content) || {}),
+                        ...(search || {}),
+                        ...(newChunkEntries || {}),
                     },
                 ];
+
                 return acc;
             }
 
@@ -171,7 +208,7 @@ const mapComponents = (
             return acc;
         }, {});
 
-    return map;
+    return componentsMap;
 };
 
 type MapVariantOptions = {
@@ -303,7 +340,6 @@ export const specFromFormSubmission = async (
                 return variants.some((variant) => variant.sku === sku);
             });
             const productComponentMap = mapComponents(row, mapping, 'components', shape, fetchedProduct);
-            // const mapComponentsContent = mergeContents(fetchedContent, productComponentMap);
 
             let product: JSONProduct = {
                 name: productName || variants[i].name,
