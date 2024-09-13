@@ -10,10 +10,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const { emitter } = await buildServices();
     const api = await CrystallizeAPI(request);
     const post: FormSubmission = await request.json();
-    const [validationRules, shapes] = await Promise.all([api.fetchValidationsSchema(), api.fetchShapes()]);
+
+    const [validationRules, shapes, tenant] = await Promise.all([
+        api.fetchValidationsSchema(),
+        api.fetchShapes(),
+        api.fetchTenant(),
+    ]);
     try {
+        const fetchProductVariants = await api.fetchProductVariants({
+            skus: post.rows.map((item) => item[post.mapping['variant.sku']]),
+            language: tenant.defaults.language,
+        });
+
+        const fetchProductsById = fetchProductVariants.length
+            ? await api.fetchProductsById({
+                  ids: fetchProductVariants.map((variant: any) => variant.productId),
+                  language: tenant.defaults.language,
+              })
+            : {};
+        const fetchedProductsArray = buildProductsArray(fetchProductsById);
+
         const importId = post.importId ?? Math.random().toString(36).substring(7);
-        const spec = await specFromFormSubmission(post, shapes);
+        const spec = await specFromFormSubmission(post, shapes, fetchedProductsArray ? fetchedProductsArray : []);
         const results = await runImport(
             importId,
             spec,
@@ -71,4 +89,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.error(err);
         return json({ message: err.error }, 500);
     }
+};
+
+const buildProductsArray = (data: any) => {
+    const productsArray = [];
+    for (const key in data) {
+        if (data[key] && data[key].get) {
+            productsArray.push(data[key].get);
+        }
+    }
+
+    return productsArray;
 };
