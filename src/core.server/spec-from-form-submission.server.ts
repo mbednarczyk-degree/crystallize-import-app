@@ -87,7 +87,7 @@ const contentForComponent = (component: ShapeComponent, key: string, content: st
 
     throw new Error(`Component type "${component.type} is not yet supported for import"`);
 };
-const emptyContentChunks = [] as string[];
+
 const mapComponents = (
     row: Record<string, any>,
     mapping: Record<string, string>,
@@ -109,10 +109,6 @@ const mapComponents = (
             }
 
             if (!content) {
-                if (component.type === 'contentChunk' && keyParts?.[2]) {
-                    emptyContentChunks.push(keyParts?.[2]);
-                }
-
                 return acc;
             }
 
@@ -167,12 +163,6 @@ const mapComponents = (
                     const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)[0];
                     const search = sth?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
 
-                    emptyContentChunks.forEach((chunk) => {
-                        delete search?.[chunk];
-                        delete newChunkEntries?.[chunk];
-                        delete existingChunkEntries?.[chunk];
-                    });
-
                     acc[componentId] = [
                         {
                             ...(search || {}),
@@ -185,12 +175,6 @@ const mapComponents = (
                 }
                 const search = sth?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
                 const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)?.[0];
-
-                emptyContentChunks.forEach((chunk) => {
-                    delete search?.[chunk];
-                    delete newChunkEntries?.[chunk];
-                });
-
                 acc[componentId] = [
                     {
                         ...(search || {}),
