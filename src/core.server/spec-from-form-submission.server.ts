@@ -95,9 +95,20 @@ const mapComponents = (
     shape: Shape,
     fetchedProduct?: JSONItem,
 ): Record<string, JSONComponentContent> => {
-    const emptyContentArray = Object.keys(mapping || {}).filter(
-        (key) => row[mapping[key]] === null && key.split('.')[0] === prefix,
+    const validMapping = Object.keys(mapping || {}).reduce(
+        (acc: Record<string, string>, key) => {
+            if (key && mapping[key]) {
+                acc[key] = mapping[key];
+            }
+            return acc;
+        },
+        {} as Record<string, string>,
     );
+
+    const emptyContentArray = Object.keys(validMapping).filter((key) => {
+        const mapKey = validMapping[key];
+        return mapKey && row?.[mapKey] === null && key.split('.')[0] === prefix;
+    });
     // @ts-ignore
     const fetchedProductChunks = fetchedProduct?.components?.filter((cmp: any) => cmp.type === 'contentChunk');
 
@@ -161,7 +172,7 @@ const mapComponents = (
                     const search = parsedChunks?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
                     //remove from search the empty objects with keys the same as emptycomponentid
 
-                    if (emptyChunkId?.split('.')[1] === componentId) {
+                    if (emptyChunkId?.split('.')[1] === componentId && search) {
                         Object.keys(search).forEach((key) => {
                             if (key === emptyChunkId.split('.')[2]) {
                                 delete search[key];
@@ -181,7 +192,7 @@ const mapComponents = (
                 const search = parsedChunks?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
                 const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)?.[0];
 
-                if (emptyChunkId?.split('.')[1] === componentId) {
+                if (emptyChunkId?.split('.')[1] === componentId && search) {
                     Object.keys(search).forEach((key) => {
                         if (key === emptyChunkId.split('.')[2]) {
                             delete search[key];
