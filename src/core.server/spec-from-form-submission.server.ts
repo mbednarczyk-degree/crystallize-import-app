@@ -95,7 +95,7 @@ const mapComponents = (
     shape: Shape,
     fetchedProduct?: JSONItem,
 ): Record<string, JSONComponentContent> => {
-    const emptyContentArray = Object.keys(mapping).filter(
+    const emptyContentArray = Object.keys(mapping || {}).filter(
         (key) => row[mapping[key]] === null && key.split('.')[0] === prefix,
     );
     // @ts-ignore
@@ -133,7 +133,7 @@ const mapComponents = (
         })
         ?.filter(Boolean);
 
-    const componentsMap = Object.entries(mapping)
+    const componentsMap = Object.entries(mapping || {})
         .filter(([key]) => key.split('.')[0] === prefix)
         .reduce((acc: Record<string, JSONComponentContent>, [key, value]) => {
             const keyParts = key.split('.');
