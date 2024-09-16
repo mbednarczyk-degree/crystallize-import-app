@@ -95,9 +95,20 @@ const mapComponents = (
     shape: Shape,
     fetchedProduct?: JSONItem,
 ): Record<string, JSONComponentContent> => {
-    const emptyContentArray = Object.keys(mapping || {}).filter(
-        (key) => row[mapping[key]] === null && key.split('.')[0] === prefix,
+    const validMapping = Object.keys(mapping || {}).reduce(
+        (acc: Record<string, string>, key) => {
+            if (key) {
+                acc[key] = mapping[key];
+            }
+            return acc;
+        },
+        {} as Record<string, string>,
     );
+
+    const emptyContentArray = Object.keys(validMapping).filter((key) => {
+        const mapKey = mapping?.[key];
+        return mapKey && row?.[mapKey] === null && key.split('.')[0] === prefix;
+    });
     // @ts-ignore
     const fetchedProductChunks = fetchedProduct?.components?.filter((cmp: any) => cmp.type === 'contentChunk');
 
