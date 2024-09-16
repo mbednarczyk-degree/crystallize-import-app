@@ -172,7 +172,7 @@ const mapComponents = (
                     const search = parsedChunks?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
                     //remove from search the empty objects with keys the same as emptycomponentid
 
-                    if (emptyChunkId?.split('.')[1] === componentId) {
+                    if (emptyChunkId?.split('.')[1] === componentId && search) {
                         Object.keys(search).forEach((key) => {
                             if (key === emptyChunkId.split('.')[2]) {
                                 delete search[key];
@@ -192,7 +192,7 @@ const mapComponents = (
                 const search = parsedChunks?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
                 const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)?.[0];
 
-                if (emptyChunkId?.split('.')[1] === componentId) {
+                if (emptyChunkId?.split('.')[1] === componentId && search) {
                     Object.keys(search).forEach((key) => {
                         if (key === emptyChunkId.split('.')[2]) {
                             delete search[key];
