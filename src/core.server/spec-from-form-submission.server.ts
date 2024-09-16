@@ -95,6 +95,44 @@ const mapComponents = (
     shape: Shape,
     fetchedProduct?: JSONItem,
 ): Record<string, JSONComponentContent> => {
+    const emptyContentArray = Object.keys(mapping).filter(
+        (key) => row[mapping[key]] === null && key.split('.')[0] === prefix,
+    );
+    // @ts-ignore
+    const fetchedProductChunks = fetchedProduct?.components?.filter((cmp: any) => cmp.type === 'contentChunk');
+
+    const parsedChunks = fetchedProductChunks
+        ?.map((chunk: any) => {
+            const content = chunk?.content?.chunks
+                ?.flatMap((chunkArray: any) => {
+                    return chunkArray?.map((chunk: any) => {
+                        if (chunk.type === 'selection') {
+                            return {
+                                [chunk.componentId]: chunk?.content?.options?.map((option: any) => option.key),
+                            };
+                        }
+                        if (chunk.type === 'files') {
+                            return {
+                                [chunk.componentId]: chunk?.content?.files?.map((file: any) => ({
+                                    src: file.url,
+                                })),
+                            };
+                        }
+                        return { [chunk.componentId]: chunk.content };
+                    });
+                })
+                ?.filter((item: any) => {
+                    const value = Object.values(item)[0];
+                    return value !== null && value !== undefined;
+                });
+
+            const reduceFetchedChunkContent = content?.reduce((acc: any, item: any) => ({ ...acc, ...item }), {});
+            if (reduceFetchedChunkContent) {
+                return { [chunk.componentId]: [reduceFetchedChunkContent] };
+            }
+        })
+        ?.filter(Boolean);
+
     const componentsMap = Object.entries(mapping)
         .filter(([key]) => key.split('.')[0] === prefix)
         .reduce((acc: Record<string, JSONComponentContent>, [key, value]) => {
@@ -113,56 +151,23 @@ const mapComponents = (
             }
 
             if (component.type === 'contentChunk') {
-                // @ts-ignore
-                const fetchedProductChunks = fetchedProduct?.components?.filter(
-                    (cmp: any) => cmp.type === 'contentChunk',
-                );
-
-                const sth = fetchedProductChunks
-                    ?.map((chunk: any) => {
-                        const content = chunk?.content?.chunks
-                            ?.flatMap((chunkArray: any) => {
-                                return chunkArray?.map((chunk: any) => {
-                                    if (chunk.type === 'selection') {
-                                        return {
-                                            [chunk.componentId]: chunk?.content?.options?.map(
-                                                (option: any) => option.key,
-                                            ),
-                                        };
-                                    }
-                                    if (chunk.type === 'files') {
-                                        return {
-                                            [chunk.componentId]: chunk?.content?.files?.map((file: any) => ({
-                                                src: file.url,
-                                            })),
-                                        };
-                                    }
-                                    return { [chunk.componentId]: chunk.content };
-                                });
-                            })
-                            ?.filter((item: any) => {
-                                const value = Object.values(item)[0];
-                                return value !== null && value !== undefined;
-                            });
-
-                        const reduceFetchedChunkContent = content?.reduce(
-                            (acc: any, item: any) => ({ ...acc, ...item }),
-                            {},
-                        );
-                        if (reduceFetchedChunkContent) {
-                            return { [chunk.componentId]: [reduceFetchedChunkContent] };
-                        }
-                    })
-                    ?.filter(Boolean);
-
+                const emptyChunkId = emptyContentArray.find((empty) => empty.split('.')[1] === componentId);
                 if (acc[componentId]) {
                     // that's normal, we can have multiple content chunks
                     // but the import will only fill the 1st one
                     const existingChunks = acc[componentId] as JSONContentChunk;
                     const existingChunkEntries = existingChunks[0];
                     const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)[0];
-                    const search = sth?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
+                    const search = parsedChunks?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
+                    //remove from search the empty objects with keys the same as emptycomponentid
 
+                    if (emptyChunkId?.split('.')[1] === componentId) {
+                        Object.keys(search).forEach((key) => {
+                            if (key === emptyChunkId.split('.')[2]) {
+                                delete search[key];
+                            }
+                        });
+                    }
                     acc[componentId] = [
                         {
                             ...(search || {}),
@@ -173,8 +178,17 @@ const mapComponents = (
 
                     return acc;
                 }
-                const search = sth?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
+                const search = parsedChunks?.find((item: any) => item?.[componentId])?.[componentId]?.[0];
                 const newChunkEntries = contentForComponent(component, keyParts.slice(1).join('.'), content)?.[0];
+
+                if (emptyChunkId?.split('.')[1] === componentId) {
+                    Object.keys(search).forEach((key) => {
+                        if (key === emptyChunkId.split('.')[2]) {
+                            delete search[key];
+                        }
+                    });
+                }
+
                 acc[componentId] = [
                     {
                         ...(search || {}),
