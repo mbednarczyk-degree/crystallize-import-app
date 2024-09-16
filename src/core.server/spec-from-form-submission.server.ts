@@ -97,7 +97,7 @@ const mapComponents = (
 ): Record<string, JSONComponentContent> => {
     const validMapping = Object.keys(mapping || {}).reduce(
         (acc: Record<string, string>, key) => {
-            if (key) {
+            if (key && mapping[key]) {
                 acc[key] = mapping[key];
             }
             return acc;
@@ -106,7 +106,7 @@ const mapComponents = (
     );
 
     const emptyContentArray = Object.keys(validMapping).filter((key) => {
-        const mapKey = mapping?.[key];
+        const mapKey = validMapping[key];
         return mapKey && row?.[mapKey] === null && key.split('.')[0] === prefix;
     });
     // @ts-ignore
