@@ -334,8 +334,21 @@ export const specFromFormSubmission = async (
         }
     };
 
+    const rowsWithValidImages = await Promise.all(
+        rows.map(async (row) => {
+            const imagesField = mapping['variant.images'];
+            if (imagesField && row[imagesField]) {
+                row[imagesField] = row[imagesField].replace(/,+\s*$/, '');
+                const imageUrls = row[imagesField].split(',').map((url: string) => url.trim());
+                const validImageUrls = await filterInvalidImages(imageUrls);
+                row[imagesField] = validImageUrls.join(',');
+            }
+            return row;
+        }),
+    );
+
     if (shape.type === 'product') {
-        const variants = rows.map((row) =>
+        const variants = rowsWithValidImages.map((row) =>
             mapVariant(row, mapping, shape, fetchedProducts, {
                 roundPrices: !!roundPrices,
             }),
@@ -393,4 +406,25 @@ export const specFromFormSubmission = async (
     return {
         items,
     };
+};
+
+const isValidImage = async (url: string): Promise<boolean> => {
+    try {
+        const response = await fetch(url, { method: 'HEAD' });
+        return response.status === 200;
+    } catch (error) {
+        console.error(`Error fetching image URL: ${url}`, error);
+        return false;
+    }
+};
+
+// Function to filter out invalid image URLs
+const filterInvalidImages = async (images: string[]): Promise<string[]> => {
+    const validImages = [];
+    for (const image of images) {
+        if (await isValidImage(image)) {
+            validImages.push(image);
+        }
+    }
+    return validImages;
 };
