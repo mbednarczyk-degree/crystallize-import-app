@@ -343,6 +343,21 @@ export const specFromFormSubmission = async (
                 const validImageUrls = await filterInvalidImages(imageUrls);
                 row[imagesField] = validImageUrls.join(',');
             }
+
+            for (const [key, value] of Object.entries(mapping)) {
+                if (key.startsWith('components.') && value && row[value]) {
+                    const keyParts = key.split('.');
+                    const componentId = keyParts[1];
+                    const component = shape.components?.find((cmp) => cmp.id === componentId);
+                    if (component && component.type === 'images') {
+                        row[value] = row[value].replace(/,+\s*$/, '');
+                        const imageUrls = row[value].split(',').map((url: string) => url.trim());
+                        const validImageUrls = await filterInvalidImages(imageUrls);
+                        row[value] = validImageUrls.join(',');
+                    }
+                }
+            }
+
             return row;
         }),
     );
