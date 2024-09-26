@@ -316,7 +316,6 @@ export const specFromFormSubmission = async (
           }, [])
         : [];
 
-    // init spec with folder
     const items: JSONItem[] = folders;
 
     const findParent = (row: Record<string, any>) => {
@@ -334,7 +333,46 @@ export const specFromFormSubmission = async (
         }
     };
 
-    const rowsWithValidImages = await Promise.all(
+    const processComponent = async (
+        component: ShapeComponent,
+        keyPrefix: string,
+        row: Record<string, any>,
+        mapping: Record<string, string>,
+        prefix: 'components' | 'variantComponents',
+        shape: Shape,
+    ) => {
+        const key = `${keyPrefix}${component.id}`;
+        const value = mapping[key];
+
+        if (value && row[value]) {
+            if (component.type === 'images') {
+                row[value] = row[value].replace(/,+\s*$/, '');
+                const imageUrls = row[value].split(',').map((url: string) => url.trim());
+                const validImageUrls = await filterInvalidImages(imageUrls);
+                row[value] = validImageUrls.join(',');
+            } else if (component.type === 'files') {
+                row[value] = row[value].replace(/,+\s*$/, '');
+                const fileUrls = row[value].split(',').map((url: string) => url.trim());
+                const validFileUrls = await filterInvalidFiles(fileUrls);
+                row[value] = validFileUrls.join(',');
+            } else if (component.type === 'contentChunk') {
+                const contentChunkComponents = (component.config as ContentChunkComponentConfig)?.components || [];
+                for (const subComponent of contentChunkComponents) {
+                    await processComponent(subComponent, `${key}.`, row, mapping, prefix, shape);
+                }
+            } else {
+                // Handling other component types if needed
+            }
+        } else if (component.type === 'contentChunk') {
+            // If the `contentChunk` component does not have a direct mapping, but may have nested components
+            const contentChunkComponents = (component.config as ContentChunkComponentConfig)?.components || [];
+            for (const subComponent of contentChunkComponents) {
+                await processComponent(subComponent, `${key}.`, row, mapping, prefix, shape);
+            }
+        }
+    };
+
+    const rowsWithValidFilesAndImages = await Promise.all(
         rows.map(async (row) => {
             const imagesField = mapping['variant.images'];
             if (imagesField && row[imagesField]) {
@@ -345,15 +383,37 @@ export const specFromFormSubmission = async (
             }
 
             for (const [key, value] of Object.entries(mapping)) {
-                if (key.startsWith('components.') && value && row[value]) {
+                if ((key.startsWith('components.') || key.startsWith('variantComponents.')) && value && row[value]) {
                     const keyParts = key.split('.');
+                    const prefix = keyParts[0] as 'components' | 'variantComponents';
                     const componentId = keyParts[1];
-                    const component = shape.components?.find((cmp) => cmp.id === componentId);
-                    if (component && component.type === 'images') {
-                        row[value] = row[value].replace(/,+\s*$/, '');
-                        const imageUrls = row[value].split(',').map((url: string) => url.trim());
-                        const validImageUrls = await filterInvalidImages(imageUrls);
-                        row[value] = validImageUrls.join(',');
+                    const component = shape[prefix]?.find((cmp) => cmp.id === componentId);
+
+                    if (component) {
+                        if (component.type === 'contentChunk') {
+                            const contentChunkComponents =
+                                (component.config as ContentChunkComponentConfig)?.components || [];
+                            for (const subComponent of contentChunkComponents) {
+                                await processComponent(
+                                    subComponent,
+                                    `${keyParts.slice(0, 2).join('.')}.`,
+                                    row,
+                                    mapping,
+                                    prefix,
+                                    shape,
+                                );
+                            }
+                        } else if (component.type === 'images') {
+                            row[value] = row[value].replace(/,+\s*$/, '');
+                            const imageUrls = row[value].split(',').map((url: string) => url.trim());
+                            const validImageUrls = await filterInvalidImages(imageUrls);
+                            row[value] = validImageUrls.join(',');
+                        } else if (component.type === 'files') {
+                            row[value] = row[value].replace(/,+\s*$/, '');
+                            const fileUrls = row[value].split(',').map((url: string) => url.trim());
+                            const validFileUrls = await filterInvalidFiles(fileUrls);
+                            row[value] = validFileUrls.join(',');
+                        }
                     }
                 }
             }
@@ -363,7 +423,7 @@ export const specFromFormSubmission = async (
     );
 
     if (shape.type === 'product') {
-        const variants = rowsWithValidImages.map((row) =>
+        const variants = rowsWithValidFilesAndImages.map((row) =>
             mapVariant(row, mapping, shape, fetchedProducts, {
                 roundPrices: !!roundPrices,
             }),
@@ -371,7 +431,6 @@ export const specFromFormSubmission = async (
         const mapProduct = (obj: Record<string, JSONProduct>, row: Record<string, any>, i: number) => {
             const productName = row[mapping['item.name']];
             const sku = row[mapping['variant.sku']];
-            //find fetchedProduct by sku
             const fetchedProduct = fetchedProducts?.find((product) => {
                 const { variants } = product as JSONProduct;
                 return variants.some((variant) => variant.sku === sku);
@@ -402,7 +461,7 @@ export const specFromFormSubmission = async (
         items.push(...Object.values(rows.reduce(mapProduct, {})));
     } else {
         items.push(
-            ...rows.map((row) => {
+            ...rowsWithValidFilesAndImages.map((row) => {
                 const fetchedProduct = fetchedProducts.find((product) => {
                     const { variants } = product as JSONProduct;
                     return variants.some((variant) => variant.sku === row[mapping['variant.sku']]);
@@ -426,14 +485,24 @@ export const specFromFormSubmission = async (
 const isValidImage = async (url: string): Promise<boolean> => {
     try {
         const response = await fetch(url, { method: 'HEAD' });
-        return response.status === 200;
+        const contentType = response.headers.get('content-type');
+        return response.status === 200 && contentType?.startsWith('image/') === true;
     } catch (error) {
         console.error(`Error fetching image URL: ${url}`, error);
         return false;
     }
 };
 
-// Function to filter out invalid image URLs
+const isValidFile = async (url: string): Promise<boolean> => {
+    try {
+        const response = await fetch(url, { method: 'HEAD' });
+        return response.status === 200;
+    } catch (error) {
+        console.error(`Error fetching file URL: ${url}`, error);
+        return false;
+    }
+};
+
 const filterInvalidImages = async (images: string[]): Promise<string[]> => {
     const validImages = [];
     for (const image of images) {
@@ -442,4 +511,14 @@ const filterInvalidImages = async (images: string[]): Promise<string[]> => {
         }
     }
     return validImages;
+};
+
+const filterInvalidFiles = async (files: string[]): Promise<string[]> => {
+    const validFiles = [];
+    for (const file of files) {
+        if (await isValidFile(file)) {
+            validFiles.push(file);
+        }
+    }
+    return validFiles;
 };
