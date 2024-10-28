@@ -42,6 +42,7 @@ export const fetchItem = async (
                         content {
                           ... on NumericComponentContent {
                             number
+                            unit
                           }
                           ... on SingleLineComponentContent {
                             text

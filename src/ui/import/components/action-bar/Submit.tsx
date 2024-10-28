@@ -43,6 +43,7 @@ export const Submit = () => {
 
     const importData = async () => {
         dispatch.updateLoading(true);
+        let isError = false;
         try {
             const rows = state.rows.filter((row) => row._import);
             const batchSize = 1;
@@ -74,18 +75,22 @@ export const Submit = () => {
                 if (res.status !== 200) {
                     const error = await res.json();
                     console.error(error);
+                    dispatch.updateMainErrors(error);
+                    isError = true;
                     break;
                 } else {
                     const response = await res.json();
                     if (response.success !== true) {
                         console.error('dispatching', response.errors);
                         dispatch.updateMainErrors(response.errors);
+                        isError = true;
                         break;
                     }
                 }
             }
-
-            dispatch.updateDone(true);
+            if (!isError) {
+                dispatch.updateDone(true);
+            }
         } catch (err: any) {
             console.error(err);
         } finally {
