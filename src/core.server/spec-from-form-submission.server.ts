@@ -122,6 +122,14 @@ const mapComponents = (
                                 [chunk.componentId]: chunk?.content?.options?.map((option: any) => option.key),
                             };
                         }
+                        if (chunk.type === 'numeric' && chunk?.content) {
+                            return {
+                                [chunk.componentId]: {
+                                    number: chunk?.content?.number,
+                                    ...(chunk?.content?.unit ? { unit: chunk?.content?.unit } : {}),
+                                },
+                            };
+                        }
                         if (chunk.type === 'files') {
                             return {
                                 [chunk.componentId]: chunk?.content?.files?.map((file: any) => ({
