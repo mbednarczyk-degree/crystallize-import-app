@@ -22,6 +22,7 @@ export const fetchProductsById = async ({ ids, language }: FetchProductsByIdArg,
               content {
                 ... on NumericContent {
                   number
+                  unit
                 }
                 ... on SingleLineContent {
                   text
@@ -51,6 +52,7 @@ export const fetchProductsById = async ({ ids, language }: FetchProductsByIdArg,
             content {
               ... on NumericContent {
                 number
+                unit
               }
               ... on SingleLineContent {
                 text
@@ -78,6 +80,7 @@ export const fetchProductsById = async ({ ids, language }: FetchProductsByIdArg,
                   content {
                     ... on NumericContent {
                       number
+                      unit
                     }
                     ... on SingleLineContent {
                       text
