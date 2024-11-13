@@ -238,8 +238,12 @@ const mapVariant = (
     fetchedProducts?: JSONItem[],
     options?: MapVariantOptions,
 ): JSONProductVariant => {
-    const name = row[mapping[FIELD_MAPPINGS.item.name.key]];
     const sku = row[mapping['variant.sku']];
+    const fetchedProduct = fetchedProducts?.find((product) => {
+        const { variants } = product as JSONProduct;
+        return variants.some((variant) => variant.sku === sku);
+    });
+    const name = fetchedProduct?.name || row[mapping[FIELD_MAPPINGS.item.name.key]];
     const images = row[mapping['variant.images']];
     let price = row[mapping['variant.price']] ? Number.parseFloat(row[mapping['variant.price']]) : undefined;
     const stock = row[mapping['variant.stock']] ? Number.parseFloat(row[mapping['variant.stock']]) : undefined;
@@ -271,10 +275,6 @@ const mapVariant = (
             }),
         );
     }
-    const fetchedProduct = fetchedProducts?.find((product) => {
-        const { variants } = product as JSONProduct;
-        return variants.some((variant) => variant.sku === sku);
-    });
     variant.components = mapComponents(row, mapping, 'variantComponents', shape, fetchedProduct);
     return variant;
 };
@@ -437,12 +437,12 @@ export const specFromFormSubmission = async (
             }),
         );
         const mapProduct = (obj: Record<string, JSONProduct>, row: Record<string, any>, i: number) => {
-            const productName = row[mapping['item.name']];
             const sku = row[mapping['variant.sku']];
             const fetchedProduct = fetchedProducts?.find((product) => {
                 const { variants } = product as JSONProduct;
                 return variants.some((variant) => variant.sku === sku);
             });
+            const productName = fetchedProduct?.name || row[mapping['item.name']];
             const productComponentMap = mapComponents(row, mapping, 'components', shape, fetchedProduct);
 
             let product: JSONProduct = {
