@@ -117,6 +117,13 @@ const mapComponents = (
             const content = chunk?.content?.chunks
                 ?.flatMap((chunkArray: any) => {
                     return chunkArray?.map((chunk: any) => {
+                        if (chunk.type === 'richText') {
+                            return {
+                                [chunk.componentId]: {
+                                    json: chunk.content?.json,
+                                },
+                            };
+                        }
                         if (chunk.type === 'singleLine') {
                             return { [chunk.componentId]: chunk.content?.text };
                         }
