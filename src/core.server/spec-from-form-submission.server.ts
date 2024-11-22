@@ -117,6 +117,9 @@ const mapComponents = (
             const content = chunk?.content?.chunks
                 ?.flatMap((chunkArray: any) => {
                     return chunkArray?.map((chunk: any) => {
+                        if (chunk.type === 'singleLine') {
+                            return { [chunk.componentId]: chunk.content?.text };
+                        }
                         if (chunk.type === 'selection') {
                             return {
                                 [chunk.componentId]: chunk?.content?.options?.map((option: any) => option.key),
