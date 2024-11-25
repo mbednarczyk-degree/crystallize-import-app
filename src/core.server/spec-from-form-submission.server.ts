@@ -54,7 +54,7 @@ const contentForComponent = (component: ShapeComponent, key: string, content: st
     }
 
     if (component.type === 'singleLine' || component.type === 'richText') {
-        return content;
+        return content?.toString();
     }
 
     if (component.type === 'contentChunk') {
