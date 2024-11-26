@@ -82,7 +82,7 @@ const contentForComponent = (component: ShapeComponent, key: string, content: st
     }
 
     if (component.type === 'files') {
-        return content.split(',').map((src) => ({ src }));
+        return content.match(/https?:\/\/.*?\.[a-zA-Z0-9]+(?=,|$)/g)?.map((src) => ({ src }));
     }
 
     throw new Error(`Component type "${component.type} is not yet supported for import"`);
@@ -370,7 +370,11 @@ export const specFromFormSubmission = async (
                 row[value] = validImageUrls.join(',');
             } else if (component.type === 'files') {
                 row[value] = row[value].replace(/,+\s*$/, '');
-                const fileUrls = row[value].split(',').map((url: string) => url.trim());
+                const fileUrls =
+                    row[value].match(/https?:\/\/.*?\.[a-zA-Z0-9]+(?=,|$)/g)?.map((url: string) => {
+                        const createUrl = new URL(url);
+                        return createUrl.href.trim();
+                    }) || [];
                 const validFileUrls = await filterInvalidFiles(fileUrls);
                 row[value] = validFileUrls.join(',');
             } else if (component.type === 'contentChunk') {
